@@ -61,7 +61,8 @@ translation_vector = centroid_object - centroid_model
 print("Translation Vector:", translation_vector)
 
 pcd_model.translate(translation_vector)
-
+o3d.io.write_point_cloud('pcd_object.pcd', pcd_object)
+o3d.io.write_point_cloud('pcd_model.pcd', pcd_model)
 bbox_object = pcd_object.get_axis_aligned_bounding_box()
 bbox_model = pcd_model.get_axis_aligned_bounding_box()
 bbox_object.color = (1, 0, 0)
