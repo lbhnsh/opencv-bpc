@@ -1,6 +1,7 @@
 import open3d as o3d
 import numpy as np
 import cv2 
+import copy
 
 # Reading images: RGB, Depth, Mask
 color = cv2.imread("000000.jpg")[:,:,::-1]
@@ -11,6 +12,8 @@ depth = depth.astype(np.float32) * 0.1 # depth scale : 0.1
 mask = cv2.imread("000000_000004.png", 0)
 # mask = np.rot90(mask)
 
+cv2.imshow('color', color)
+cv2.waitKey(0)
 color = cv2.bitwise_and(color, color, mask=mask)
 depth = depth.copy()
 depth[mask == 0] = 0  # set background depth to 0
@@ -69,10 +72,80 @@ bbox_object.color = (1, 0, 0)
 bbox_model.color = (0, 1, 0)
 o3d.visualization.draw_geometries([pcd_object, bbox_object, pcd_model, bbox_model])
 
+def compute_pca(pcd):
+    pts = np.asarray(pcd.points)
+    centroid = np.mean(pts, axis=0)
+    cov = np.dot((pts - centroid).T, (pts - centroid))
+    eigvals, eigvecs = np.linalg.eigh(cov)
+    idx = np.argsort(eigvals)[::-1]
+    eigvecs = eigvecs[:, idx]
+    return centroid, eigvecs
+
+# Compute PCA for both point clouds.
+centroid_object, axes_object = compute_pca(pcd_object)
+centroid_model, axes_model = compute_pca(pcd_model)
+
+# Compute rotation matrix: align model's principal axes to object's axes.
+R = np.dot(axes_object, axes_model.T)
+# Compute translation vector: align the centroids.
+t = centroid_object - np.dot(R, centroid_model)
+
+# Build the homogeneous transformation matrix.
+transformation_pca = np.eye(4)
+transformation_pca[:3, :3] = R
+transformation_pca[:3, 3] = t
+
+print("PCA-based Transformation:\n", transformation_pca)
+
+# ----- Function to convert rotation matrix to roll, pitch, yaw -----
+
+def rotation_matrix_to_euler_angles(R):
+    """
+    Calculates roll, pitch, yaw from a 3x3 rotation matrix.
+    Assumes rotation order ZYX.
+    """
+    sy = np.sqrt(R[0,0]**2 + R[1,0]**2)
+    singular = sy < 1e-6
+
+    if not singular:
+        roll = np.arctan2(R[2,1], R[2,2])
+        pitch = np.arctan2(-R[2,0], sy)
+        yaw = np.arctan2(R[1,0], R[0,0])
+    else:
+        roll = np.arctan2(-R[1,2], R[1,1])
+        pitch = np.arctan2(-R[2,0], sy)
+        yaw = 0
+
+    return roll, pitch, yaw
+
+# Compute roll, pitch, yaw from the rotation matrix
+roll, pitch, yaw = rotation_matrix_to_euler_angles(R)
+print("Roll (rad): {:.3f}, Pitch (rad): {:.3f}, Yaw (rad): {:.3f}".format(roll, pitch, yaw))
+print("Roll (deg): {:.1f}, Pitch (deg): {:.1f}, Yaw (deg): {:.1f}".format(
+    np.degrees(roll), np.degrees(pitch), np.degrees(yaw)
+))
+
+# ----- Visualize original and rotated models -----
+
+# Make a copy of the original pcd_model to show it before transformation.
+# pcd_model_original = pcd_model.copy()
+pcd_model_original = copy.deepcopy(pcd_model)
+pcd_model_original.paint_uniform_color([0, 0, 1])
+# pcd_model_original.paint_uniform_color([0, 0, 1])  # blue for original
+
+# Apply the PCA-based transformation to pcd_model.
+pcd_model.transform(transformation_pca)
+pcd_model.paint_uniform_color([0, 1, 0])  # green for transformed
+
+print("Displaying original and transformed model point clouds...")
+
+# Visualize both point clouds together with the object cloud for context.
+o3d.visualization.draw_geometries([pcd_model_original, pcd_model])
+
 '''
 BELOW CODE IS NOT OF USE FOR NOW
 '''
-
+'''
 # radius_feature = 0.0001
 # fpfh_object = o3d.pipelines.registration.compute_fpfh_feature(
 #     pcd_object,
@@ -157,3 +230,4 @@ geometries = [world_frame, object_frame, pcd_object]
 
 # Visualize the result with annotations for x, y, z axes.
 o3d.visualization.draw_geometries(geometries)
+'''
