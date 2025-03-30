@@ -140,7 +140,25 @@ pcd_model.paint_uniform_color([0, 1, 0])  # green for transformed
 print("Displaying original and transformed model point clouds...")
 
 # Visualize both point clouds together with the object cloud for context.
-o3d.visualization.draw_geometries([pcd_model_original, pcd_model])
+# bbox_object = pcd_model.get_axis_aligned_bounding_box()
+# bbox_model = pcd_model_original.get_axis_aligned_bounding_box()
+# bbox_object.color = (1, 0, 0)
+# bbox_model.color = (0, 1, 0)
+o3d.visualization.draw_geometries([pcd_model_original, pcd_model,])
+
+# Create a coordinate frame at the object's centroid
+object_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.04)
+object_frame.translate(centroid_object)
+
+# Create a coordinate frame for the model's transformed orientation
+model_frame = copy.deepcopy(object_frame)
+model_frame.transform(transformation_pca)
+
+print("Displaying original and transformed model point clouds with coordinate frames...")
+
+# Visualize both point clouds together with the object cloud for context and coordinate frames
+o3d.visualization.draw_geometries([pcd_model_original, pcd_model, object_frame, model_frame])
+
 
 '''
 BELOW CODE IS NOT OF USE FOR NOW
